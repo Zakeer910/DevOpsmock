@@ -1,17 +1,9 @@
-pipeline {
+pipeline{
     agent any
 
-    environment {
-        DOCKER_HUB_USER = 'zakeer910'
-        DOCKER_HUB_REPO = 'jenkmock'
-        IMAGE_NAME = 'nginx'
-        CONTAINER_NAME = 'app'
-        DOCKER_HUB_PASS = 'Zakeer@7786'  
-    }
-
-    stages {
-        stage('Install Docker') {
-            steps {
+    stages{
+        stage('docker install'){
+            steps{ 
                 script {
                     def dockerInstalled = sh(script: 'which docker', returnStatus: true) == 0
                     if (!dockerInstalled) {
@@ -26,69 +18,40 @@ pipeline {
                 }
             }
         }
-
-        stage('Pull Nginx Image') {
-            steps {
+        stage('pull'){
+            steps{ 
                 sh 'docker pull nginx'
             }
         }
-
-        stage('Remove Existing Container (if any)') {
-            steps { 
-                script {
-                    def containerExists = sh(script: "docker ps -a --filter 'name=${CONTAINER_NAME}' --format '{{.ID}}'", returnStdout: true).trim()
-                    if (containerExists) {
-                        sh "docker rm -f ${CONTAINER_NAME}"
-                    }
-                }
+        stage('run'){
+            steps{
+                sh 'docker run -it -d --name zak -p 8000:80 nginx'
             }
         }
-
-        stage('Run Container') {
-            steps {
-                sh 'docker run -d --name ${CONTAINER_NAME} -p 8000:80 nginx'
+        stage('backup'){
+            steps{
+                sh 'docker commit zak backup'
             }
         }
-
-        stage('Create Snapshot of Running Container') {
-            steps {
-                sh 'docker commit ${CONTAINER_NAME} ${DOCKER_HUB_USER}/${DOCKER_HUB_REPO}:${IMAGE_NAME}'
+        stage('tag'){
+            steps{
+                sh 'docker tag backup zakeer910/jenkmock'
             }
         }
-
-        stage('Login to Docker Hub') {
-            steps {
-                sh 'echo "$DOCKER_HUB_PASS" | docker login -u "$DOCKER_HUB_USER" --password-stdin'
-            }
-        }
-
-        stage('Push Image to Docker Hub') {
-            steps {
-                sh 'docker push ${DOCKER_HUB_USER}/${DOCKER_HUB_REPO}:${IMAGE_NAME}'
+        stage('push'){
+            steps{
+                 sh 'echo "Zakeer@7786" | docker login -u "zakeer910" --password-stdin'
+                sh 'docker push zakeer910/jenkmock'
             }
         }
     }
-
-    post {
-        always {
-            script {
-                // Delete the image after the pipeline ends
-                def imageExists = sh(script: "docker images -q nginx", returnStdout: true).trim()
-                if (imageExists) {
-                    sh "docker rmi -f nginx"
-                }
-            }
+    post{
+        always{
+            sh 'docker rmi -f nginx'
         }
-
-        success {
-            script {
-                // Remove the container after a successful pipeline
-                def containerExists = sh(script: "docker ps -q -f name=${CONTAINER_NAME}", returnStdout: true).trim()
-                if (containerExists) {
-                    sh "docker stop ${CONTAINER_NAME}"
-                    sh "docker rm ${CONTAINER_NAME}"
-                }
-            }
+        success{
+            sh 'docker rm -f zak'
         }
     }
+    
 }
